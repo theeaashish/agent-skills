@@ -214,7 +214,8 @@ export const wireDLQ = (worker: Worker, queueName: string) => {
       },
       {
         // Idempotency: same source job → same DLQ jobId → BullMQ no-ops duplicate adds
-        jobId: `dlq:${queueName}:${job.id}`,
+        // Note: Replaced colons with dashes because BullMQ v5 strictly prohibits colons in custom job IDs.
+        jobId: `dlq-${queueName}-${job.id}`,
       },
     );
     // alert: PagerDuty / Sentry / Slack — also idempotent on this jobId
@@ -231,7 +232,7 @@ A `QueueEvents('email:send').on('failed', …)` runs in **every** replica. With 
 If you absolutely cannot run the listener inside the worker process (e.g., your DLQ runs in a separate consumer service that never instantiates a Worker), you have two safe options:
 
 1. **Idempotent insert from a single replica via leader election** — use `SET dlq:leader:<queue> <podId> NX PX 30000` with periodic renewal; only the leader's QueueEvents handler writes. All other pods see they're not the leader and drop the event.
-2. **Idempotent insert with deterministic key from every replica** — same `jobId: \`dlq:${queueName}:${job.id}\``. BullMQ's `add()`with an existing`jobId` is a no-op, so duplicates collapse to one. Cheaper than leader election but produces N Redis round-trips per failure.
+2. **Idempotent insert with deterministic key from every replica** — same `jobId: \`dlq-${queueName}-${job.id}\``. BullMQ's `add()`with an existing`jobId` is a no-op, so duplicates collapse to one. Cheaper than leader election but produces N Redis round-trips per failure.
 
 ### Worker crashes and stall transitions
 
@@ -259,26 +260,27 @@ Prevent the same logical job from queuing twice — critical for webhook-driven 
 
 ```ts
 // jobId acts as a deduplication key — BullMQ replaces or ignores duplicates
+// Note: Replaced colons with dashes because BullMQ v5 strictly prohibits colons in custom job IDs.
 await emailQueue.add(
   "send-welcome",
   { to: user.email, templateId: "welcome", variables: {} },
   {
-    jobId: `welcome:${user.id}`, // stable, deterministic ID
+    jobId: `welcome-${user.id}`, // stable, deterministic ID
     // existing job with same ID is left untouched (add is a no-op)
   },
 );
 
 // To force-replace an existing job (re-process):
 // queue.remove(jobId) does NOT exist — always fetch the Job instance first, then call job.remove()
-const existingJob = await emailQueue.getJob(`welcome:${user.id}`);
+const existingJob = await emailQueue.getJob(`welcome-${user.id}`);
 if (existingJob) {
   await existingJob.remove(); // job.remove() is the correct API — locked (active) jobs throw
 }
-await emailQueue.add("send-welcome", data, { jobId: `welcome:${user.id}` });
+await emailQueue.add("send-welcome", data, { jobId: `welcome-${user.id}` });
 ```
 
 > **Webhook safety**: In webhook handlers always set a deterministic `jobId`
-> (e.g., `webhook:${event.id}`) so duplicate deliveries produce one job, not N.
+> (e.g., `webhook-${event.id}`) so duplicate deliveries produce one job, not N.
 
 ---
 
@@ -317,7 +319,7 @@ schedulers.forEach((s) => console.log(s.id, s.next)); // next: timestamp of next
 
 > **Scheduler ID uniqueness** — the scheduler ID is the deduplication key.
 > Two `upsertJobScheduler` calls with the same ID update the same scheduler,
-> not create two. Use a stable, descriptive ID like `'weekly-report:tenant:123'`.
+> not create two. Use a stable, descriptive ID like `'weekly-report-tenant-123'`.
 
 ---
 
@@ -560,7 +562,7 @@ Each role must have its own connection. Sharing causes blocked event loops and m
 ### No DLQ wiring on any worker
 
 **Severity**: ERROR  
-Exhausted jobs with no DLQ destination are silently discarded. Wire DLQ via `worker.on('failed')` (process-local; fires once on the replica that processed the job) with a deterministic `jobId` (`dlq:<queue>:<originalJobId>`) on the DLQ insert for idempotency. Do **not** wire DLQ via `QueueEvents.on('failed')` — it fans out to every replica and produces N duplicate DLQ inserts per failure.
+Exhausted jobs with no DLQ destination are silently discarded. Wire DLQ via `worker.on('failed')` (process-local; fires once on the replica that processed the job) with a deterministic `jobId` (`dlq-<queue>-<originalJobId>`) on the DLQ insert for idempotency. Do **not** wire DLQ via `QueueEvents.on('failed')` — it fans out to every replica and produces N duplicate DLQ inserts per failure.
 
 ### Worker `limiter` misunderstood as per-replica
 
