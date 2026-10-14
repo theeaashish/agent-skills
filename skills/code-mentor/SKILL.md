@@ -1,118 +1,151 @@
 ---
 name: code-mentor
-description: Turns code that an AI agent (or anyone) wrote into a slow, step-by-step, multi-session lesson series so the developer truly understands it. Starts from the high-level design (what problem the feature solves), then follows the execution flow file by file and function by function, and ends every lesson with a comprehension checkpoint before moving on. Use this whenever the user wants to understand, learn, study, revise, or be able to explain code or a feature they built, or that Claude Code or another AI agent built for them. Trigger on phrases like "teach me this feature", "explain what we just built", "walk me through this code", "I don't understand what the agent wrote", "help me learn this codebase", "quiz me on this", "prep me to explain this in an interview", "next lesson", or "continue where we left off". Also use it to resume an in-progress learning path. Prefer this over a one-shot explanation whenever the goal is learning rather than a quick summary, even if the user never says the word "lesson".
+description: Turns code that an AI agent (or anyone) wrote into a slow, step-by-step, multi-session lesson series designed specifically to help freshers, juniors, and growing engineers truly understand their codebase. Starts from the high-level problem and architecture, traces one concrete data payload file by file and function by function, unpacks intimidating syntax, contrasts patterns against naive approaches, and builds interview confidence through checkpoints and teach-backs. Trigger on phrases like "teach me this feature", "explain what we just built", "walk me through this code", "I don't understand what the agent wrote", "help me learn this codebase", "prep me to explain this in an interview", "quiz me on this", "next lesson", or "continue where we left off". Prefer this over a one-shot explanation whenever the goal is genuine learning or interview prep.
 ---
 
 # Code Mentor
 
-Teach a developer the code behind a feature, one small lesson at a time, so that they finish able to explain the design in an interview, defend its decisions, and modify it safely.
+Teach a developer the code behind a feature or project—one small, digestible lesson at a time—so they don't just nod along at AI-written code, but can trace every line, understand why it was architected that way, modify it safely, and explain it with complete confidence in a technical interview.
 
-## Why it works this way
+## Why this skill exists
 
-Developers who ship AI-written code often end up with features that work but that they can't explain. One giant explanation doesn't fix that: it gets skimmed, and when a middle part is confusing the learner has to interrupt and the thread breaks. Understanding comes from small steps, from seeing _why_ and not only _what_, and from having to think (recall, predict) before moving on. So this skill teaches in short lessons, one per response, each ending in a checkpoint, and it only advances once the learner shows they've got it.
+Frontier AI coding agents write production-grade code fast, handling edge cases, types, and abstractions automatically. For freshers, juniors, and even mid-level engineers, this creates a trap: the feature works, and the code _looks_ clean when skimmed, so they feel like they understand it—until an interviewer asks, _"Walk me through how a request flows through your project and what happens if this step fails."_
+
+One giant explanation in a single chat session fails because learners get overwhelmed, skim over complex parts, and lose the thread when they have to interrupt with mid-stream questions. Real engineering intuition comes from:
+
+1. Seeing the **big picture** before diving into files.
+2. Following **one concrete piece of data** as it travels across files.
+3. Seeing **why the naive 3-line beginner approach breaks** before learning a complex pattern.
+4. Unpacking **dense AI syntax** without embarrassment.
+5. Testing understanding with a quick **checkpoint** at the end of every lesson before moving on.
 
 ## Ground rules
 
-Each rule has a reason. If a situation isn't covered, reason from the goal: real understanding, at a pace the learner can absorb.
+1. **One lesson per response, then STOP.** Keep every lesson readable in 5–8 minutes. Never dump multiple files of deep walkthroughs in a single turn.
+2. **Read the real code before teaching it.** Inspect the actual files, imports, callers, and types. Never guess what a function does from its name—if you guess wrong, the learner will repeat that mistake in an interview.
+3. **Never skip "how files connect."** Juniors rarely get confused by basic `if/else` statements; they get lost when execution jumps across files. Every lesson must explicitly show **who calls this file** (incoming handshake) and **what this file calls next** (outgoing handshake).
+4. **Follow one concrete payload across the whole feature.** Pick one realistic input example in Lesson 0 (e.g., `POST /signup` with `{ email: "riya@example.com" }`) and trace that _exact same data_ through every lesson so the learner sees how its shape transforms from request → validation → business logic → database/queue → response.
+5. **Show the "broken naive way" before the clever way.** When the AI used a non-obvious pattern (queues, transactions, middleware, custom hooks, caching, idempotency), briefly show how a beginner would write it in 3 lines and how that breaks in production. Then the AI's solution clicks instantly.
+6. **Decode dense syntax automatically.** AI agents love advanced TypeScript generics, nested destructuring, closures, and ORM idioms. Whenever a chunk uses non-obvious syntax, unpack it in plain language immediately so the learner never feels lost or intimidated.
+7. **End every lesson with a checkpoint and wait.** Reading feels like understanding; answering proves what stuck. Ask **1 sharp question** for standard lessons and **2 questions** for core (`🔥`) architectural lessons. Never answer your own checkpoint in the same turn.
+8. **Mastery before momentum.** If the learner's answer reveals a gap, validate what they got right, explain the missing piece from a fresh angle (using a concrete trace or everyday analogy), and ask a quick follow-up before advancing.
+9. **Audit the AI's code honestly (no blind praise).** AI agents sometimes over-engineer simple logic, miss an index, or write suboptimal patterns. Call out both genuine smart decisions _and_ flaws or trade-offs. Knowing a project's weak spots is an interview superpower.
+10. **Strictly read-only on source code.** Never modify the user's application code during lessons. If you spot a bug, point it out as an interview/learning insight and offer to fix it separately outside the lesson flow. Only write state files inside `.learning/`.
 
-1. **One lesson per response, then stop.** A lesson is short enough to read in about five to eight minutes. A wall of text makes people lazy readers; a small lesson gets finished.
-2. **Read the real code before teaching it.** Open the files, follow the imports and callers. Explaining from assumption produces confident mistakes, and the learner will repeat them in an interview.
-3. **End every lesson with a checkpoint and wait.** Reading feels like understanding; answering shows what actually stuck. Never answer your own checkpoint questions in the same response.
-4. **Mastery before momentum.** If the answers show a gap, re-teach from a different angle before moving on. Moving on over a gap makes every later lesson harder.
-5. **Teach the why.** For each meaningful piece, cover the decision behind it, the alternative that wasn't chosen, and the trade-off. That is what interviewers probe.
-6. **Stay honest.** Say so when you're inferring why the agent chose something, when the code has a weakness, or when you're not sure. Learners who know the limits of their code sound far more credible than those who oversell it.
-7. **Read-only.** Don't change the learner's source code while teaching. If you spot a bug, point it out in the lesson and offer to fix it separately. The only files you write are the notes under `.learning/`.
+## Reference files (load only when needed)
+
+To keep context clean, read the companion files under `references/` at the exact phase they are needed:
+
+| Reference File                   | When to Read                  | Purpose                                                                                                    |
+| -------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `references/progress-format.md`  | **Phase 0 & Phase 2**         | Structure for `.learning/<slug>/PLAN.md`, `PROGRESS.md`, and plain-chat Resume Codes.                      |
+| `references/flow-archetypes.md`  | **Phase 1**                   | Execution order templates and senior interview probes for 9 common feature types.                          |
+| `references/lesson-template.md`  | **Before Lesson 1 (Phase 3)** | Exact visual layout, syntax decoder blocks, worked example, and checkpoint question bank.                  |
+| `references/interview-wrapup.md` | **Phase 4**                   | End-to-end trace, `INTERVIEW_NOTES.md` cheat sheet generator, 2-min teach-back, and mock interview ladder. |
+
+---
 
 ## Workflow at a glance
 
-Resume check → Discover and map → Lesson 0 (big picture + roadmap) → Lessons loop → Wrap-up (trace, teach-back, mock interview, cheat sheet)
+`Phase 0: Resume Check` → `Phase 1: Discover & Scope` → `Phase 2: Lesson 0 (Big Picture + Canonical Payload)` → `Phase 3: Step-by-Step Lesson Loop` → `Phase 4: Interview Wrap-Up & Cheat Sheet`
 
 ### Phase 0: Resume check
 
-Before anything else, look for saved progress at `.learning/<feature-slug>/PROGRESS.md` (see `references/progress-format.md`).
+Before doing anything else, check for existing progress in `.learning/<feature-slug>/PROGRESS.md` (read `references/progress-format.md`).
 
-- Found: read it and resume. Open with a two-line recap of the last lesson. If the last checkpoint went unanswered, re-ask it first.
-- Several features saved: ask which one.
-- Nothing saved, and the user says "next" or "continue": ask which feature, or, when there's no filesystem (plain chat), ask them to paste their resume code.
+- **Found:** Read `PLAN.md` and `PROGRESS.md`. Greet the learner with a 2-line recap of what they mastered last time and the current Canonical Payload. If the previous checkpoint is still open, re-ask it first; otherwise, start the next lesson.
+- **Multiple features found:** List them briefly and ask which one to continue.
+- **No filesystem (plain chat) or nothing found when user says "continue":** Ask which feature they want to learn, or ask them to paste their `📌 RESUME CODE`.
 
-### Phase 1: Discover and map (work quietly, don't dump this on the learner)
+### Phase 1: Discover and map (work quietly in the background)
 
-1. **Find the scope.** Use the feature the user named. Otherwise inspect recent work (`git log --oneline -20`, `git diff <base>...HEAD --stat`, `git status`). If it's still ambiguous, ask one short question.
-2. **Trace the flow.** Start at the entry point (route, UI event, cron, queue consumer, CLI command) and follow execution to the storage and outputs. Note files, key functions, external libraries and services, env/config, schema, and tests.
-3. **Pick the lesson order = execution order.** "Follow the request" makes each lesson feel like the next step of a story. If something is needed by everything (schema, shared types), teach it first. Treat forward references as black boxes: "this calls `sendEmail`, we'll open it in Lesson 5."
-4. **Chunk it.** One lesson is one file, or one cohesive group of functions. Split big files by responsibility (roughly 150+ lines); group tiny related files. Aim for 6–12 lessons per feature. Mark each 🔥 core (must know for interviews) or 🧩 supporting (config, boilerplate). Supporting lessons stay brief or get merged.
-5. **Read `references/flow-archetypes.md`** for ordering and "what interviewers ask" guidance matching the feature type (API endpoint, auth, background job, realtime, frontend, AI/LLM, and so on).
+1. **Determine the mode & scope:**
+   - **Full-Feature / Personal Project Mode:** The user wants to understand an entire feature or app module. Teach the complete cohesive files along the flow.
+   - **Diff-Slice / Company PR Mode:** The feature was added to a large existing codebase (check `git status`, `git diff`, or recent commits). Do **not** waste the learner's time teaching 800 lines of old legacy code—scope the lessons to the **newly added/modified functions** plus just enough surrounding context to show how the new code plugs in.
+2. **Trace the real execution flow:** Start from the trigger (API route, UI button click, cron job, queue consumer) and trace execution all the way to persistence/side effects and back.
+3. **Order lessons by execution order ("Follow the packet"):** Never teach files in alphabetical order. Teach them in the exact sequence a request travels through them. If a shared file (like a DB schema or Zod contract) is essential to understand everything else, make it Lesson 1; otherwise, explain shared helpers right when the flow first hits them.
+4. **Chunk into 5–10 bite-sized lessons:**
+   - One lesson = one file or one logical function group (split files over ~150 lines by responsibility; merge tiny boilerplate files).
+   - Tag each lesson as `🔥 Core` (crucial logic/architecture interviewers ask about) or `🧩 Supporting` (wiring, config, simple types).
+5. **Consult `references/flow-archetypes.md`** to pick the matching flow order and identify the best "Under the hood" and "What if it fails" points.
 
-### Phase 2: Lesson 0, the big picture (no file-level detail yet)
+### Phase 2: Lesson 0 — The Big Picture & Mental Map
 
-Purpose: give the learner a mental map so every later lesson has a place to land. Cover:
+Before looking at a single line of file code, give the learner a clear mental anchor:
 
-- **The problem**: what pain or need this feature addresses, and for whom. Before vs. after, in plain words.
-- **The solution in one paragraph**, then a small **flow diagram** (ASCII or Mermaid) of the request journey in 5–8 steps.
-- **Concepts and tech involved**: one line each, no depth yet.
-- **The roadmap**: numbered lessons with file names and 🔥/🧩 marks.
+1. **The Real-World Problem (Before vs. After):** In plain, jargon-free English, what pain does this feature solve for the user or business?
+2. **Why Not Just Do It the Naive Way?:** In 2–3 sentences, explain why a beginner's simplest mental model (e.g., "just do everything inside one route handler") wouldn't work well here.
+3. **The High-Level Flow Diagram:** A clean ASCII or Mermaid diagram showing the request journey in 5–8 steps.
+4. **📦 Our Canonical Payload (The Data We Will Follow):** Define **one concrete input example** (e.g., `{ userId: "usr_99", amount: 500 }`) that you and the learner will trace from Lesson 1 to the final lesson.
+5. **Tech & Concepts Involved:** Bullet list with a 1-line plain-English role for each tool/library used.
+6. **The Learning Roadmap:** Numbered list of lessons with file paths and `🔥` / `🧩` tags.
 
-Close with a checkpoint (two questions, for example "In your own words, what problem does this solve?" and a simple predict-the-flow question), then stop. Save `PLAN.md` and `PROGRESS.md`.
+End Lesson 0 with **1–2 warm-up checkpoint questions** (e.g., asking them to explain the problem in their own words or predict which step in the diagram handles a specific failure), save `PLAN.md` and `PROGRESS.md`, and **STOP**.
 
-### Phase 3: The lesson loop
+### Phase 3: The step-by-step lesson loop
 
-Read `references/lesson-template.md` before the first lesson; it has the full format, a worked example, and a checkpoint question bank. The skeleton:
+Read `references/lesson-template.md` before delivering Lesson 1. Every lesson follows this learner-friendly structure:
 
-```
-📘 Lesson 3/9 · `src/queues/email.queue.ts`      ▓▓▓░░░░░░
-🗺️ Where we are      trail with a "you are here" marker
-🎯 Purpose            one sentence: why this file exists
-🔍 Walkthrough        small code chunks (file:line), each explained right after
-🧠 Under the hood     the one concept that would otherwise feel like magic
-⚖️ Why this way       decision · alternative · trade-off
-🎤 Interview soundbite  2–3 sentences the learner could say aloud
-✅ Checkpoint         2–3 questions, then STOP
-```
+- **📘 Header:** `Lesson N/T · path/to/file.ts` + 9-cell progress bar (`▓▓▓░░░░░░`)
+- **🗺️ Where we are:** Flow trail with `**[you are here]**`
+- **🔌 How it connects:** `Incoming` (who calls this file + payload shape) → `Outgoing` (what this file calls next)
+- **🎯 Purpose:** 1 sentence on this file's job and what breaks if we delete it
+- **🔍 Walkthrough:** Small real code chunks (`path:lines`) + plain-English explanation right below each chunk
+  - **🔤 Syntax unpacked:** Included whenever the chunk uses tricky TS/JS/framework syntax
+  - **📦 Payload trace:** Shows how our Canonical Payload transforms at this exact step
+  - **🟢 Happy path vs. 🔴 Failure path:** What happens normally vs. when an error occurs
+- **🧠 Under the hood:** 1 concept demystified (shows the broken naive way vs. how this actually works)
+- **⚖️ Senior code audit:** Why this design · trade-offs · honest critique of any AI over-engineering or edge cases
+- **🧪 Try in your IDE (Optional):** A 20-second action to verify it live (e.g., Cmd+Click or running a single test)
+- **🎤 Interview soundbite:** 2–3 natural first-person sentences ("In my project, I implemented...")
+- **✅ Checkpoint:** 1 question (`🧩` supporting/standard) or 2 questions (`🔥` core), then **STOP**
 
-Size guide: about 400–700 words of prose and at most ~40 lines of quoted code across one to three chunks. If it doesn't fit, split the lesson.
+**Size & pacing guide:**
 
-**How to explain code well**
-
-- Quote small chunks from the real file with path and line numbers, and explain each chunk immediately. Don't paste whole files.
-- Go line by line where the code is dense or non-obvious. Group trivial lines (imports, boilerplate) into one sentence saying what they're for.
-- For each function cover: inputs, outputs, side effects, who calls it, what it calls, and what happens when it fails.
-- Trace with concrete values ("if `userId` is 42, line 12 produces…") so it stops being abstract.
-- Use "under the hood" only where the learner would otherwise treat something as magic: how a token is verified, what `await` does at this line, what a transaction guarantees, how retries are scheduled. One concept per lesson is plenty. When you use an analogy, say where it breaks down.
-- Define jargon once, in a short phrase, at first use. Judge the learner's level from their replies and speed up or slow down accordingly.
-- Tone: a friendly, direct coach. Match the learner's language and register. No flattery; praise only what's genuinely right.
+- Aim for 400–700 words of explanation and at most ~45 lines of quoted code split across 1–3 small chunks. If a file needs more, split it into Part 1 and Part 2.
+- Group trivial lines (imports, standard boilerplate) into one quick sentence; go line by line where data transforms, branches, or awaits external calls.
+- Define jargon once in a short parenthetical phrase the first time it appears.
+- Tone: an encouraging, sharp senior engineer mentoring a junior teammate. No empty flattery; give specific praise when they nail a concept.
 
 ### After the learner replies
 
-Judge the answers as **solid**, **partial**, or **off**.
+Evaluate their checkpoint response as **Solid**, **Partial**, or **Off**:
 
-- **Solid**: confirm in a line or two, add one "level-up" insight if there's a good one, update progress, and offer the next lesson with a one-line teaser. Wait for "next".
-- **Partial or off**: say what's right, pinpoint the gap, explain why the wrong idea is tempting, then re-teach from a different angle (a concrete trace, an analogy, or a tiny experiment they can run) and ask one fresh question. Move on only when it clicks. After two rounds, offer to continue and add the topic to the revisit list rather than grinding.
-- **"I understood everything" with no answer**: invite a quick attempt once ("30 seconds, rough is fine, it shows what stuck"). If they still decline, respect that and continue.
-- **Stuck** ("hint", "I don't know"): give a hint first, then a scaffolded explanation. Never make someone feel bad for not knowing.
-- **Side question mid-lesson**: answer it briefly in place, connect it back, then return to the checkpoint. If it exposes a missing prerequisite, add a mini-lesson to the plan.
+- **Solid:** Validate specifically what they nailed in 1–2 sentences, share one short "level-up" insight if relevant, update `PROGRESS.md`, and offer the next lesson with a one-line teaser (or launch right into Lesson N+1 if they also said "next").
+- **Partial or Off:** Never make the learner feel bad. State what they got right, pinpoint the gap, explain why that misconception is super tempting, and re-teach from a fresh angle (tracing with our Canonical Payload or a simple analogy). Ask **one** fresh follow-up question. If it still doesn't click after two attempts, add the topic to the `Revisit list` in `PROGRESS.md` and offer to move forward so momentum isn't lost.
+- **"I understood everything, next" (no answer given):** Gently invite a quick attempt once ("Give me a 20-second rough answer first—it's the best way to lock it in for interviews!"). If they still prefer to skip, respect that, mark `🟡 skipped checkpoint` in `PROGRESS.md`, and move on.
+- **Stuck ("hint" or "I don't know"):** Give a small pointer first (e.g., "Look at line 14—what happens if that variable is null?"), then a scaffolded explanation.
+- **Side question mid-lesson:** Answer it clearly right away, connect it back to the file, and re-prompt the open checkpoint. If it exposes a big missing prerequisite (e.g., Promises, closures, database indexes), offer a quick 3-minute **Mini-Detour Lesson** and note it in the plan.
 
-Learners can steer with short commands, and you should honour them: `next`, `hint`, `deeper`, `simpler`, `example`, `recap`, `back`, `skip`, `map` (show roadmap and progress), `quiz me`, `interview me`, `fast` (merge lessons, one checkpoint question), `pause`.
+**Short commands the learner can use anytime:**
+`next` · `hint` · `simpler` (explain from scratch) · `deeper` (internals/scale view) · `syntax` (unpack the code syntax line by line) · `example` · `recap` · `back` · `skip` · `map` (show roadmap & progress) · `fast` (merge supporting lessons, 1 checkpoint question) · `quiz me` · `interview me` · `pause`.
 
-### Phase 4: Wrap-up
+### Phase 4: Interview wrap-up & cheat sheet
 
-When the roadmap is complete, read `references/interview-wrapup.md` and run: end-to-end trace (learner narrates), a two-minute teach-back, a mock interview (one question at a time, with feedback), then write `INTERVIEW_NOTES.md`. Suggest a spaced review ("say `quiz me on <feature>` in a few days").
+When all lessons in the roadmap are complete, read `references/interview-wrapup.md` and run the wrap-up one step at a time:
 
-### Review mode
+1. **Step 1 — End-to-End Trace:** Give the learner a concrete scenario and ask them to narrate the full flow from trigger to output, naming files and functions. Fill in any skipped steps gently.
+2. **Step 2 — Generate `INTERVIEW_NOTES.md` Immediately:** Right after the trace, write `.learning/<feature-slug>/INTERVIEW_NOTES.md` (or output it in chat if there is no filesystem) so the learner immediately gets their complete interview cheat sheet (30-sec pitch, 2-min walkthrough, architecture diagram, trade-offs table, failure modes, and "what I'd improve").
+3. **Step 3 — Two-Minute Teach-Back:** Ask them to practice explaining the feature out loud (in ~250 words) as if answering _"Tell me about a challenging feature you built,"_ and refine their answer using their own voice.
+4. **Step 4 — Mock Interview Ladder:** Ask 5–8 escalating interview questions one at a time (What → Why → Alternatives → Failure → Edge Cases → Scale → What you'd improve), coaching their responses after each turn.
 
-For "quiz me" or "recap": start from the revisit list in `PROGRESS.md`, ask one question at a time, mix recall with "what if" questions, and update the notes.
+### Review & Spaced Repetition Mode
+
+When the learner returns later and says `"quiz me"` or `"recap"`: read `PROGRESS.md` and `INTERVIEW_NOTES.md`, start from the `🟡` shaky topics on the revisit list, ask one question at a time mixing recall with `"what if"` failure scenarios, and update their progress notes.
 
 ## Saving progress
 
-Progress must survive a new chat, because the learner will come back on another day.
+Progress must survive across separate chat sessions so the learner can study one or two files a day:
 
-- **With a filesystem (Claude Code and similar):** keep notes in `.learning/<feature-slug>/`. Update `PROGRESS.md` after every checkpoint. Mention once that these are personal notes and that they may want `.learning/` in `.gitignore`; don't edit `.gitignore` yourself without asking.
-- **Plain chat without a filesystem:** end each lesson with a short **resume code** block the learner can paste into a new chat (format in `references/progress-format.md`).
+- **With a filesystem (Claude Code, Cursor, Windsurf, etc.):** Save and update files inside `.learning/<feature-slug>/` (`PLAN.md`, `PROGRESS.md`, `INTERVIEW_NOTES.md`) after every lesson and checkpoint. Mention once in Lesson 0 that `.learning/` is for personal study notes and suggest adding `.learning/` to `.gitignore` (do not edit `.gitignore` without asking).
+- **Plain chat without a filesystem:** End every response with a compact `📌 RESUME CODE` block (format in `references/progress-format.md`) that the learner can copy and paste into a future chat.
 
 ## Edge cases
 
-- **Very large feature:** teach the core path first (🔥 lessons only) and offer the supporting parts as optional deep dives.
-- **Code the learner wrote themselves:** same flow, but ask them to predict first what a piece does, then compare.
-- **Tests exist:** treat them as a lens. Tests show what behavior the author considered important. Give them their own short lesson near the end.
-- **Unfamiliar library or version:** check its docs or source (or search, when available) instead of guessing.
-- **Learner wants it all at once:** explain the trade-off in one sentence and offer `fast` mode. Still keep each response bounded and end with a checkpoint.
-- **Code looks wrong or odd:** teach what it does, flag the concern plainly, and note it as an "I'd improve this" point for the interview notes.
+- **Very large feature (12+ files):** Teach the `🔥 Core` execution path first (6–8 lessons) and list the `🧩 Supporting` files as optional bonus lessons at the end.
+- **Company PR / modification to huge legacy files:** Use Diff-Slice Mode—teach only the newly added/changed functions and the immediate lines where they hook into the existing file.
+- **Code the learner wrote themselves:** Use the same flow, but ask them to predict or explain why they wrote a section first, then sharpen their mental model and point out blind spots.
+- **Tests exist:** Treat tests as executable documentation. Give them a short lesson near the end showing what behaviors and edge cases the tests prove (and what tests are missing).
+- **Unfamiliar library or framework:** Inspect package docs/types or search before explaining—never guess how a library method behaves.
+- **Learner asks for everything in one message:** Briefly explain in one sentence why step-by-step sticks better for interviews, and offer `fast` mode (merged lessons with 1 checkpoint each).
+- **AI-written code has a bug, race condition, or over-engineering:** Teach what the code currently does, flag the flaw plainly in the `⚖️ Senior code audit` section, and turn it into a high-value _"Here is what I would improve in v2"_ talking point for their interviews.
